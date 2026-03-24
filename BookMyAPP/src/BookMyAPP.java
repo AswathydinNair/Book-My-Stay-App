@@ -1,118 +1,110 @@
 import java.util.*;
 
-// Reservation (enhanced with bookingId)
+class InvalidBookingException extends Exception {
+    public InvalidBookingException(String message) {
+        super(message);
+    }
+}
+
+// Reservation
 class Reservation {
-    private String bookingId;
     private String guestName;
     private String roomType;
 
-    public Reservation(String bookingId, String guestName, String roomType) {
-        this.bookingId = bookingId;
+    public Reservation(String guestName, String roomType) {
         this.guestName = guestName;
         this.roomType = roomType;
     }
 
-    public String getBookingId() { return bookingId; }
     public String getGuestName() { return guestName; }
     public String getRoomType() { return roomType; }
+}
 
-    public void display() {
-        System.out.println("BookingID: " + bookingId +
-                ", Guest: " + guestName +
-                ", Room: " + roomType);
+// Inventory
+class RoomInventory {
+    private Map<String, Integer> availability = new HashMap<>();
+
+    public RoomInventory() {
+        availability.put("SingleRoom", 1);
+        availability.put("DoubleRoom", 1);
+    }
+
+    public int getAvailable(String roomType) {
+        return availability.getOrDefault(roomType, -1);
+    }
+
+    public void decrement(String roomType) throws InvalidBookingException {
+        int count = getAvailable(roomType);
+
+        if (count <= 0) {
+            throw new InvalidBookingException("No rooms available for " + roomType);
+        }
+
+        availability.put(roomType, count - 1);
     }
 }
 
-// 📦 Booking History (Storage)
-class BookingHistory {
 
-    // List preserves order (chronological)
-    private List<Reservation> history = new ArrayList<>();
+class BookingValidator {
 
-    // Store confirmed booking
-    public void addBooking(Reservation reservation) {
-        history.add(reservation);
-    }
+    public static void validate(Reservation r, RoomInventory inventory)
+            throws InvalidBookingException {
 
-    // Read-only access
-    public List<Reservation> getAllBookings() {
-        return Collections.unmodifiableList(history);
-    }
-}
-
-// 📊 Report Service (Read-only)
-class BookingReportService {
-
-    // Display all bookings
-    public void showAllBookings(BookingHistory history) {
-        System.out.println("\n=== Booking History ===");
-
-        for (Reservation r : history.getAllBookings()) {
-            r.display();
-        }
-    }
-
-    // Summary report
-    public void generateSummary(BookingHistory history) {
-        System.out.println("\n=== Booking Summary Report ===");
-
-        Map<String, Integer> roomCount = new HashMap<>();
-        int totalBookings = 0;
-
-        for (Reservation r : history.getAllBookings()) {
-            totalBookings++;
-
-            String type = r.getRoomType();
-            roomCount.put(type, roomCount.getOrDefault(type, 0) + 1);
+        // Null / empty check
+        if (r.getGuestName() == null || r.getGuestName().trim().isEmpty()) {
+            throw new InvalidBookingException("Guest name cannot be empty");
         }
 
-        System.out.println("Total Bookings: " + totalBookings);
+        // Room type validation
+        if (inventory.getAvailable(r.getRoomType()) == -1) {
+            throw new InvalidBookingException("Invalid room type: " + r.getRoomType());
+        }
 
-        for (String type : roomCount.keySet()) {
-            System.out.println(type + ": " + roomCount.get(type));
+        // Availability check
+        if (inventory.getAvailable(r.getRoomType()) <= 0) {
+            throw new InvalidBookingException("Room not available: " + r.getRoomType());
         }
     }
 }
 
-// 🔧 Simulated Booking Service (integration point from UC6)
+// Booking Service
 class BookingService {
 
-    private int counter = 1;
+    public void bookRoom(Reservation r, RoomInventory inventory) {
+        try {
 
-    // Simulate confirmed booking
-    public Reservation confirmBooking(String guest, String roomType) {
-        String bookingId = "BKG-" + counter++;
-        System.out.println("✅ Booking Confirmed for " + guest + " | ID: " + bookingId);
+            BookingValidator.validate(r, inventory);
 
-        return new Reservation(bookingId, guest, roomType);
+
+            inventory.decrement(r.getRoomType());
+
+            System.out.println(" Booking successful for " + r.getGuestName()
+                    + " (" + r.getRoomType() + ")");
+
+        } catch (InvalidBookingException e) {
+
+            System.out.println(" Booking failed: " + e.getMessage());
+        }
     }
 }
 
-// 🚀 Main Class
+// Main Class
 public class BookMyAPP {
     public static void main(String[] args) {
 
-        BookingService bookingService = new BookingService();
-        BookingHistory history = new BookingHistory();
-        BookingReportService reportService = new BookingReportService();
+        RoomInventory inventory = new RoomInventory();
+        BookingService service = new BookingService();
 
-        System.out.println("=== Booking System with History ===\n");
+        System.out.println("=== Booking with Validation ===\n");
 
-        // Simulate confirmed bookings (from UC6)
-        Reservation r1 = bookingService.confirmBooking("Alice", "SingleRoom");
-        Reservation r2 = bookingService.confirmBooking("Bob", "DoubleRoom");
-        Reservation r3 = bookingService.confirmBooking("Charlie", "SingleRoom");
+        service.bookRoom(new Reservation("Alice", "SingleRoom"), inventory);
 
-        // Store in history
-        history.addBooking(r1);
-        history.addBooking(r2);
-        history.addBooking(r3);
+        service.bookRoom(new Reservation("Bob", "LuxuryRoom"), inventory);
 
-        // Admin views history
-        reportService.showAllBookings(history);
+        service.bookRoom(new Reservation("", "DoubleRoom"), inventory);
 
-        reportService.generateSummary(history);
+        service.bookRoom(new Reservation("Charlie", "SingleRoom"), inventory);
 
-        System.out.println("\nNote: Reporting does NOT modify booking data.");
+        System.out.println("\nSystem continues running safely.");
     }
 }
